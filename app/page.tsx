@@ -36,7 +36,9 @@ export default function Home() {
       const totalScrollable = elementHeight - viewportHeight;
       const scrolled = -rect.top;
       
-      const progress = Math.max(0.0, Math.min(scrolled / totalScrollable, 1.0));
+      // Reach 100% of the journey spline at 80% of the scroll height to create a static buffer zone at the end
+      const rawProgress = totalScrollable > 0 ? scrolled / totalScrollable : 0;
+      const progress = Math.max(0.0, Math.min(rawProgress / 0.8, 1.0));
       setJourneyProgress(progress);
     };
 
@@ -122,7 +124,7 @@ export default function Home() {
         </section>
 
         {/* SECTION 2: JOURNEY TIMELINE (TUNNEL) */}
-        <section id="journey" ref={journeyRef} className="relative h-[250vh] bg-black">
+        <section id="journey" ref={journeyRef} className="relative h-[300vh] bg-black">
           {/* Sticky view wrapper */}
           <div className="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
             {/* Overlay Header Info */}
