@@ -3,7 +3,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal, Shield, ArrowDown, ChevronRight, Play, ExternalLink, Zap } from 'lucide-react';
-import LenisProvider from '@/components/LenisProvider';
+import { useLenis } from '@/components/LenisProvider';
 import CustomCursor from '@/components/CustomCursor';
 import CanvasContainer from '@/components/3d/CanvasContainer';
 import HeroScene from '@/components/3d/HeroScene';
@@ -19,6 +19,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const journeyRef = useRef<HTMLDivElement>(null);
   const [journeyProgress, setJourneyProgress] = useState(0);
+  const progressRef = useRef(0);
+  const scrollLockedRef = useRef(false);
+  const [scrollLocked, setScrollLocked] = useState(false);
+  const lenis = useLenis();
 
   // Disable page scroll while loading
   useEffect(() => {
@@ -42,30 +46,166 @@ export default function Home() {
     color: string;
   } | null>(null);
 
-  // Monitor scroll for the 3D Journey spline animation progress
+  // Monitor scroll transitions using Lenis
   useEffect(() => {
-    const handleScroll = () => {
+    if (!lenis || loading) return;
+
+    const handleLenisScroll = (e: any) => {
       if (!journeyRef.current) return;
       const rect = journeyRef.current.getBoundingClientRect();
-      const elementHeight = journeyRef.current.offsetHeight;
-      const viewportHeight = window.innerHeight;
-      
-      const totalScrollable = elementHeight - viewportHeight;
-      const scrolled = -rect.top;
-      
-      // Reach 100% of the journey spline at 80% of the scroll height to create a static buffer zone at the end
-      const rawProgress = totalScrollable > 0 ? scrolled / totalScrollable : 0;
-      const progress = Math.max(0.0, Math.min(rawProgress / 0.8, 1.0));
-      setJourneyProgress(progress);
+
+      // Trigger lock when section aligns near viewport top
+      if (!scrollLockedRef.current) {
+        if (e.direction === 1 && rect.top <= 10 && rect.top >= -50 && progressRef.current < 1.0) {
+          // Scrolling down, snap and lock
+          lenis.scrollTo(journeyRef.current, { immediate: true });
+          lenis.stop();
+          scrollLockedRef.current = true;
+          setScrollLocked(true);
+        } else if (e.direction === -1 && rect.top >= -10 && rect.top <= 50 && progressRef.current > 0.0) {
+          // Scrolling up, snap and lock
+          lenis.scrollTo(journeyRef.current, { immediate: true });
+          lenis.stop();
+          scrollLockedRef.current = true;
+          setScrollLocked(true);
+        }
+      }
     };
 
-    window.addEventListener('scroll', handleScroll);
-    handleScroll(); // Initial call
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    lenis.on('scroll', handleLenisScroll);
+    return () => {
+      lenis.off('scroll', handleLenisScroll);
+    };
+  }, [lenis, loading]);
+
+  // Handle wheel and touch inputs when scroll is locked
+  useEffect(() => {
+    if (loading || !lenis) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!scrollLockedRef.current) return;
+      e.preventDefault();
+
+      const delta = e.deltaY;
+      const currentProgress = progressRef.current;
+
+      if (delta > 0) {
+        if (currentProgress < 1.0) {
+          const nextProgress = Math.min(currentProgress + 0.015, 1.0);
+          progressRef.current = nextProgress;
+          setJourneyProgress(nextProgress);
+          
+          if (nextProgress === 1.0) {
+            lenis.start();
+            scrollLockedRef.current = false;
+            setScrollLocked(false);
+          }
+        }
+      } else if (delta < 0) {
+        if (currentProgress > 0.0) {
+          const nextProgress = Math.max(currentProgress - 0.015, 0.0);
+          progressRef.current = nextProgress;
+          setJourneyProgress(nextProgress);
+
+          if (nextProgress === 0.0) {
+            lenis.start();
+            scrollLockedRef.current = false;
+            setScrollLocked(false);
+          }
+        }
+      }
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!scrollLockedRef.current) return;
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!scrollLockedRef.current) return;
+      e.preventDefault();
+
+      const currentY = e.touches[0].clientY;
+      const deltaY = touchStartY - currentY;
+      touchStartY = currentY;
+
+      if (Math.abs(deltaY) < 1) return;
+
+      const currentProgress = progressRef.current;
+      const progressDelta = (deltaY / window.innerHeight) * 1.5;
+
+      if (deltaY > 0) {
+        if (currentProgress < 1.0) {
+          const nextProgress = Math.min(currentProgress + progressDelta, 1.0);
+          progressRef.current = nextProgress;
+          setJourneyProgress(nextProgress);
+          
+          if (nextProgress === 1.0) {
+            lenis.start();
+            scrollLockedRef.current = false;
+            setScrollLocked(false);
+          }
+        }
+      } else if (deltaY < 0) {
+        if (currentProgress > 0.0) {
+          const nextProgress = Math.max(currentProgress + progressDelta, 0.0);
+          progressRef.current = nextProgress;
+          setJourneyProgress(nextProgress);
+
+          if (nextProgress === 0.0) {
+            lenis.start();
+            scrollLockedRef.current = false;
+            setScrollLocked(false);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [lenis, loading]);
+
+  // Intercept anchor clicks to temporarily unlock scroll and adjust journey state
+  useEffect(() => {
+    if (!lenis) return;
+
+    const handleAnchorClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+      if (anchor) {
+        const href = anchor.getAttribute('href');
+        if (href && href.startsWith('#')) {
+          const targetId = href.substring(1);
+          
+          if (targetId === 'hero') {
+            progressRef.current = 0.0;
+            setJourneyProgress(0.0);
+          } else if (targetId !== 'journey') {
+            progressRef.current = 1.0;
+            setJourneyProgress(1.0);
+          }
+
+          lenis.start();
+          scrollLockedRef.current = false;
+          setScrollLocked(false);
+        }
+      }
+    };
+
+    window.addEventListener('click', handleAnchorClick);
+    return () => window.removeEventListener('click', handleAnchorClick);
+  }, [lenis]);
 
   return (
-    <LenisProvider>
+    <>
       {!loading && <CustomCursor />}
 
       <AnimatePresence>
@@ -147,9 +287,9 @@ export default function Home() {
         </section>
 
         {/* SECTION 2: JOURNEY TIMELINE (TUNNEL) */}
-        <section id="journey" ref={journeyRef} className="relative h-[300vh] bg-black">
-          {/* Sticky view wrapper */}
-          <div className="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
+        <section id="journey" ref={journeyRef} className="relative h-screen bg-black overflow-hidden">
+          {/* View wrapper */}
+          <div className="relative h-full w-full flex items-center justify-center">
             {/* Overlay Header Info */}
             <div className="absolute top-24 left-6 md:left-12 z-20 pointer-events-none select-none">
               <span className="text-[10px] font-display uppercase tracking-widest text-cyber-blue font-bold">SYSTEMS_TRACE.log</span>
@@ -160,7 +300,7 @@ export default function Home() {
             </div>
             
             {/* Main Spline Canvas */}
-            <div className="w-full h-full">
+            <div className="absolute inset-0 w-full h-full z-10">
               <CanvasContainer cameraPosition={[0, 0, 15]} fov={70}>
                 <JourneyScene scrollProgress={journeyProgress} />
               </CanvasContainer>
@@ -179,6 +319,7 @@ export default function Home() {
             </div>
           </div>
         </section>
+
 
         {/* SECTION 3: SKILLS GALAXY */}
         <section id="skills" className="relative min-h-screen flex items-center py-24 border-t border-b border-white/5 bg-[#030303]">
@@ -376,6 +517,6 @@ export default function Home() {
           <span>&copy; {new Date().getFullYear()} J MD HAFIZUR RAHMAN. ALL RIGHTS ENCRYPTED.</span>
         </div>
       </footer>
-    </LenisProvider>
+    </>
   );
 }

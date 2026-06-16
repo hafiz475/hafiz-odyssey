@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Orbitron } from "next/font/google";
 import "./globals.css";
+import LenisProvider from "@/components/LenisProvider";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
@@ -42,8 +43,11 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${orbitron.variable} h-full antialiased dark`}
     >
       <body className="min-h-full bg-[#030303] text-[#f5f5f7] font-sans selection:bg-[#00f0ff] selection:text-black">
-        {children}
+        <LenisProvider>
+          {children}
+        </LenisProvider>
       </body>
     </html>
   );
 }
+
