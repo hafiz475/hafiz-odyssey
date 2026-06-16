@@ -275,7 +275,7 @@ export default function Home() {
             <div className="lg:col-span-6 w-full h-[400px] lg:h-[550px] relative">
               <div className="absolute inset-0 bg-radial-gradient from-cyber-blue/10 to-transparent blur-3xl pointer-events-none" />
               <CanvasContainer cameraPosition={[0, 0, 5]} fov={75}>
-                <HeroScene />
+                <HeroScene isIntroPlaying={!loading} />
               </CanvasContainer>
             </div>
           </div>
