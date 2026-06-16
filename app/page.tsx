@@ -13,10 +13,27 @@ import FounderLabScene from '@/components/3d/FounderLabScene';
 import AIZoneScene from '@/components/3d/AIZoneScene';
 import ExperienceDashboard from '@/components/ui/ExperienceDashboard';
 import ContactForm from '@/components/ui/ContactForm';
+import CinematicLoader from '@/components/ui/CinematicLoader';
 
 export default function Home() {
+  const [loading, setLoading] = useState(true);
   const journeyRef = useRef<HTMLDivElement>(null);
   const [journeyProgress, setJourneyProgress] = useState(0);
+
+  // Disable page scroll while loading
+  useEffect(() => {
+    if (loading) {
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    };
+  }, [loading]);
   
   // Active state for city node inspection inside Founder Lab
   const [selectedCityNode, setSelectedCityNode] = useState<{
@@ -49,7 +66,13 @@ export default function Home() {
 
   return (
     <LenisProvider>
-      <CustomCursor />
+      {!loading && <CustomCursor />}
+
+      <AnimatePresence>
+        {loading && (
+          <CinematicLoader onComplete={() => setLoading(false)} />
+        )}
+      </AnimatePresence>
 
       {/* Cyber Grid Base Atmosphere */}
       <div className="fixed inset-0 cyber-grid opacity-10 pointer-events-none z-0" />
